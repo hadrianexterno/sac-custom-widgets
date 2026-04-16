@@ -1,4 +1,5 @@
 (function() {
+    // --- 1. WIDGET PRINCIPAL ---
     let template = document.createElement("template");
     template.innerHTML = `
         <style>
@@ -23,18 +24,14 @@
             this._props = {};
         }
 
-        // SAC llama a este método cuando configuras el panel lateral
         onCustomWidgetBeforeUpdate(changedProperties) {
             this._props = { ...this._props, ...changedProperties };
         }
 
         onCustomWidgetAfterUpdate(changedProperties) {}
 
-        // Este es el método que configuramos en el JSON para recibir los datos de tu script de SAC
         async postMessage(message) {
             const chatDiv = this._shadowRoot.getElementById("chat");
-            
-            // Mostrar confirmación de recepción
             chatDiv.innerHTML += `<div class="message user-msg"><strong>Analizando datos...</strong></div>`;
 
             if (!this._props.apiKey) {
@@ -43,8 +40,7 @@
             }
 
             try {
-                // Llamada oficial a la API de Gemini
-                const response = await fetch(\`https://generativelanguage.googleapis.com/v1beta/models/\${this._props.model || 'gemini-1.5-pro'}:generateContent?key=\${this._props.apiKey}\`, {
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${this._props.model || 'gemini-1.5-pro'}:generateContent?key=${this._props.apiKey}`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
@@ -55,23 +51,38 @@
                 const data = await response.json();
 
                 if (data.candidates && data.candidates[0].content) {
-                    // Extraer y mostrar mi respuesta
                     let reply = data.candidates[0].content.parts[0].text;
-                    // Formatear saltos de línea para HTML
-                    reply = reply.replace(/\\n/g, '<br>');
-                    chatDiv.innerHTML += `<div class="message gemini-msg"><strong>Gemini:</strong><br>\${reply}</div>`;
+                    reply = reply.replace(/\n/g, '<br>');
+                    chatDiv.innerHTML += `<div class="message gemini-msg"><strong>Gemini:</strong><br>${reply}</div>`;
                 } else if (data.error) {
-                    chatDiv.innerHTML += `<div class="message error-msg"><strong>Error de API:</strong> \${data.error.message}</div>`;
+                    chatDiv.innerHTML += `<div class="message error-msg"><strong>Error de API:</strong> ${data.error.message}</div>`;
                 }
             } catch (error) {
-                chatDiv.innerHTML += `<div class="message error-msg"><strong>Error de red:</strong> \${error.message}</div>`;
+                chatDiv.innerHTML += `<div class="message error-msg"><strong>Error de red:</strong> ${error.message}</div>`;
             }
             
-            // Auto-scroll hacia abajo
             this._shadowRoot.host.scrollTop = this._shadowRoot.host.scrollHeight;
         }
     }
 
-    // Registrar el componente web con el mismo nombre (tag) que pusimos en el JSON
+    // Registramos el widget principal
     customElements.define("com-hadrian-sap-gemini", GeminiWidget);
+
+    // --- 2. PANEL BUILDER (La pieza que faltaba) ---
+    class GeminiWidgetBuilder extends HTMLElement {
+        constructor() {
+            super();
+            this._shadowRoot = this.attachShadow({mode: "open"});
+            this._shadowRoot.innerHTML = `
+                <div style="padding: 15px; font-family: Arial, sans-serif; font-size: 13px; color: #333;">
+                    <strong>Configuración de Gemini</strong><br><br>
+                    Por favor, configura tu API Key en el panel de Propiedades (Properties) de SAC.
+                </div>
+            `;
+        }
+    }
+
+    // Registramos el panel builder para que SAC no dé error de timeout
+    customElements.define("com-hadrian-sap-gemini-builder", GeminiWidgetBuilder);
+
 })();
