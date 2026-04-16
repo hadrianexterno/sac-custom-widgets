@@ -65,10 +65,9 @@
         }
     }
 
-    // Registramos el widget principal
     customElements.define("com-hadrian-sap-gemini", GeminiWidget);
 
-    // --- 2. PANEL BUILDER (La pieza que faltaba) ---
+    // --- 2. PANEL BUILDER (Ahora sí, con la caja de texto y guardado) ---
     class GeminiWidgetBuilder extends HTMLElement {
         constructor() {
             super();
@@ -76,13 +75,35 @@
             this._shadowRoot.innerHTML = `
                 <div style="padding: 15px; font-family: Arial, sans-serif; font-size: 13px; color: #333;">
                     <strong>Configuración de Gemini</strong><br><br>
-                    Por favor, configura tu API Key en el panel de Propiedades (Properties) de SAC.
+                    <label for="apiKey" style="font-weight: bold;">API Key de Google Gemini:</label><br>
+                    <input type="password" id="apiKey" style="width: 100%; padding: 6px; margin-top: 6px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;" placeholder="Pega tu API Key aquí...">
                 </div>
             `;
         }
+
+        // SAC usa esto para poblar el panel si ya tenías una clave guardada
+        set apiKey(newApiKey) {
+            this._shadowRoot.getElementById("apiKey").value = newApiKey || "";
+        }
+
+        get apiKey() {
+            return this._shadowRoot.getElementById("apiKey").value;
+        }
+
+        // Detectar cuando pegas la clave y enviarla a las propiedades internas de SAC
+        connectedCallback() {
+            this._shadowRoot.getElementById("apiKey").addEventListener("change", (e) => {
+                this.dispatchEvent(new CustomEvent("propertiesChanged", {
+                    detail: {
+                        properties: {
+                            apiKey: e.target.value
+                        }
+                    }
+                }));
+            });
+        }
     }
 
-    // Registramos el panel builder para que SAC no dé error de timeout
     customElements.define("com-hadrian-sap-gemini-builder", GeminiWidgetBuilder);
 
 })();
