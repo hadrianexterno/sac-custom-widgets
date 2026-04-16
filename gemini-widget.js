@@ -63,7 +63,7 @@
 
         onCustomWidgetAfterUpdate(changedProperties) {}
 
-        // ✅ MÉTODO PÚBLICO — SAC lo llama con los datos del modelo
+        // MÉTODO PÚBLICO — SAC lo llama con los datos del modelo
         postMessage(message) {
             this._lastData = message;   // guarda para el botón
             this._runGemini(message);
@@ -79,16 +79,14 @@
         }
 
         async _runGemini(message) {
-            if (!this._props.apiKey) {
-                this._addMsg("error-msg", "<strong>Error:</strong> Configura la API Key en el panel de diseño.");
-                return;
-            }
-
+            // Eliminamos la validación del panel de diseño, pasa directo a procesar
             this._addMsg("user-msg", "<strong>Datos enviados a Gemini...</strong>");
 
-            // ✅ MODELO CORREGIDO — gemini-2.0-flash es estable y rápido
+            // ✅ TU LLAVE INCRUSTADA AQUÍ
+            const MI_LLAVE_GEMINI = "AQ.Ab8RN6KGCRHukb1FdLB-2mJW8jI5bqmNVZRGNsDScfTy4PPlVg";
+
             const model = this._props.model || "gemini-2.0-flash";
-            const url   = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${this._props.apiKey}`;
+            const url   = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${MI_LLAVE_GEMINI}`;
 
             try {
                 const response = await fetch(url, {
@@ -123,7 +121,7 @@
 
     customElements.define("com-hadrian-sap-gemini", GeminiWidget);
 
-    // --- BUILDER ---
+    // --- BUILDER (Panel de Diseño Limpio) ---
     class GeminiWidgetBuilder extends HTMLElement {
         constructor() {
             super();
@@ -131,8 +129,7 @@
             this._shadowRoot.innerHTML = `
                 <div style="padding:15px; font-family:Arial,sans-serif; font-size:13px; color:#333;">
                     <strong>Configuración de Gemini</strong><br><br>
-                    <label style="font-weight:bold;">API Key:</label><br>
-                    <input type="password" id="apiKey" style="width:100%;padding:6px;margin:6px 0 12px;border:1px solid #ccc;border-radius:4px;box-sizing:border-box;" placeholder="Pega tu API Key aquí...">
+                    <p style="color: #16a34a; font-weight: bold;">✓ API Key incrustada en el código</p>
                     <label style="font-weight:bold;">Modelo:</label><br>
                     <select id="model" style="width:100%;padding:6px;margin-top:6px;border:1px solid #ccc;border-radius:4px;">
                         <option value="gemini-2.0-flash">gemini-2.0-flash (recomendado)</option>
@@ -143,16 +140,13 @@
             `;
         }
 
-        set apiKey(v) { this._shadowRoot.getElementById("apiKey").value = v || ""; }
-        get apiKey()  { return this._shadowRoot.getElementById("apiKey").value; }
         set model(v)  { this._shadowRoot.getElementById("model").value = v || "gemini-2.0-flash"; }
         get model()   { return this._shadowRoot.getElementById("model").value; }
 
         connectedCallback() {
             const dispatch = () => this.dispatchEvent(new CustomEvent("propertiesChanged", {
-                detail: { properties: { apiKey: this.apiKey, model: this.model } }
+                detail: { properties: { model: this.model } }
             }));
-            this._shadowRoot.getElementById("apiKey").addEventListener("change", dispatch);
             this._shadowRoot.getElementById("model").addEventListener("change", dispatch);
         }
     }
