@@ -82,8 +82,8 @@
             // Eliminamos la validación del panel de diseño, pasa directo a procesar
             this._addMsg("user-msg", "<strong>Datos enviados a Gemini...</strong>");
 
-            // ✅ TU LLAVE INCRUSTADA AQUÍ
-            const MI_LLAVE_GEMINI = "AQ.Ab8RN6KGCRHukb1FdLB-2mJW8jI5bqmNVZRGNsDScfTy4PPlVg";
+            // ✅ INSERTA TU LLAVE AQUÍ, DIRECTO EN GITHUB
+            const MI_LLAVE_GEMINI = "PEGA_TU_LLAVE_AQUI";
 
             const model = this._props.model || "gemini-2.0-flash";
             const url   = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${MI_LLAVE_GEMINI}`;
@@ -133,23 +133,4 @@
                     <label style="font-weight:bold;">Modelo:</label><br>
                     <select id="model" style="width:100%;padding:6px;margin-top:6px;border:1px solid #ccc;border-radius:4px;">
                         <option value="gemini-2.0-flash">gemini-2.0-flash (recomendado)</option>
-                        <option value="gemini-1.5-flash">gemini-1.5-flash</option>
-                        <option value="gemini-2.0-pro-exp">gemini-2.0-pro-exp</option>
-                    </select>
-                </div>
-            `;
-        }
-
-        set model(v)  { this._shadowRoot.getElementById("model").value = v || "gemini-2.0-flash"; }
-        get model()   { return this._shadowRoot.getElementById("model").value; }
-
-        connectedCallback() {
-            const dispatch = () => this.dispatchEvent(new CustomEvent("propertiesChanged", {
-                detail: { properties: { model: this.model } }
-            }));
-            this._shadowRoot.getElementById("model").addEventListener("change", dispatch);
-        }
-    }
-
-    customElements.define("com-hadrian-sap-gemini-builder", GeminiWidgetBuilder);
-})();
+                        <option value="gemini-
