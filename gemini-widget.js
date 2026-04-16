@@ -1,27 +1,60 @@
 (function() {
-    // --- 1. WIDGET PRINCIPAL ---
     let template = document.createElement("template");
     template.innerHTML = `
         <style>
-            :host { display: block; padding: 15px; font-family: Arial, sans-serif; border: 1px solid #d1d5db; border-radius: 8px; background-color: #ffffff; overflow-y: auto; height: 100%; box-sizing: border-box; }
+            :host {
+                display: block; padding: 15px; font-family: Arial, sans-serif;
+                border: 1px solid #d1d5db; border-radius: 8px;
+                background-color: #ffffff; overflow-y: auto;
+                height: 100%; box-sizing: border-box;
+            }
             .chat-container { display: flex; flex-direction: column; gap: 12px; }
             .message { padding: 10px; border-radius: 6px; font-size: 14px; line-height: 1.5; }
-            .system-msg { background-color: #f3f4f6; color: #374151; }
-            .user-msg { background-color: #e0e7ff; color: #3730a3; border-left: 4px solid #4f46e5; }
-            .gemini-msg { background-color: #f0fdf4; color: #166534; border-left: 4px solid #16a34a; }
-            .error-msg { background-color: #fef2f2; color: #991b1b; border-left: 4px solid #dc2626; }
+            .system-msg  { background-color: #f3f4f6; color: #374151; }
+            .user-msg    { background-color: #e0e7ff; color: #3730a3; border-left: 4px solid #4f46e5; }
+            .gemini-msg  { background-color: #f0fdf4; color: #166534; border-left: 4px solid #16a34a; }
+            .error-msg   { background-color: #fef2f2; color: #991b1b; border-left: 4px solid #dc2626; }
+            .btn-row     { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+            button {
+                padding: 7px 14px; border: none; border-radius: 5px;
+                cursor: pointer; font-size: 13px; font-weight: bold;
+            }
+            #btnAnalizar { background-color: #4f46e5; color: white; }
+            #btnLimpiar  { background-color: #e5e7eb; color: #374151; }
         </style>
         <div class="chat-container" id="chat">
-            <div class="message system-msg"><strong>Estado:</strong> Esperando datos de la tabla de SAC...</div>
+            <div class="message system-msg">
+                <strong>Estado:</strong> Widget listo. Llama a <code>postMessage()</code> desde un script SAC
+                o usa el botón de abajo si ya pasaste los datos.
+            </div>
+        </div>
+        <div class="btn-row">
+            <button id="btnAnalizar">Analizar tabla</button>
+            <button id="btnLimpiar">Limpiar</button>
         </div>
     `;
 
     class GeminiWidget extends HTMLElement {
         constructor() {
             super();
-            this._shadowRoot = this.attachShadow({mode: "open"});
+            this._shadowRoot = this.attachShadow({ mode: "open" });
             this._shadowRoot.appendChild(template.content.cloneNode(true));
-            this._props = {};
+            this._props  = {};
+            this._lastData = "";   // guarda los datos que vienen de SAC
+        }
+
+        connectedCallback() {
+            this._shadowRoot.getElementById("btnAnalizar").addEventListener("click", () => {
+                if (this._lastData) {
+                    this.postMessage(this._lastData);
+                } else {
+                    this._addMsg("error-msg", "No hay datos cargados aún. Ejecuta el script SAC primero.");
+                }
+            });
+            this._shadowRoot.getElementById("btnLimpiar").addEventListener("click", () => {
+                this._shadowRoot.getElementById("chat").innerHTML =
+                    `<div class="message system-msg"><strong>Chat limpiado.</strong></div>`;
+            });
         }
 
         onCustomWidgetBeforeUpdate(changedProperties) {
@@ -30,21 +63,44 @@
 
         onCustomWidgetAfterUpdate(changedProperties) {}
 
-        async postMessage(message) {
-            const chatDiv = this._shadowRoot.getElementById("chat");
-            chatDiv.innerHTML += `<div class="message user-msg"><strong>Analizando datos...</strong></div>`;
+        // ✅ MÉTODO PÚBLICO — SAC lo llama con los datos del modelo
+        postMessage(message) {
+            this._lastData = message;   // guarda para el botón
+            this._runGemini(message);
+        }
 
+        _addMsg(cssClass, html) {
+            const chat = this._shadowRoot.getElementById("chat");
+            const div  = document.createElement("div");
+            div.className = `message ${cssClass}`;
+            div.innerHTML = html;
+            chat.appendChild(div);
+            this._shadowRoot.host.scrollTop = this._shadowRoot.host.scrollHeight;
+        }
+
+        async _runGemini(message) {
             if (!this._props.apiKey) {
-                chatDiv.innerHTML += `<div class="message error-msg"><strong>Error:</strong> No has configurado la API Key de Gemini en el panel de diseño.</div>`;
+                this._addMsg("error-msg", "<strong>Error:</strong> Configura la API Key en el panel de diseño.");
                 return;
             }
 
+            this._addMsg("user-msg", "<strong>Datos enviados a Gemini...</strong>");
+
+            // ✅ MODELO CORREGIDO — gemini-2.0-flash es estable y rápido
+            const model = this._props.model || "gemini-2.0-flash";
+            const url   = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${this._props.apiKey}`;
+
             try {
-                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${this._props.model || 'gemini-1.5-pro'}:generateContent?key=${this._props.apiKey}`, {
+                const response = await fetch(url, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
-                        contents: [{ parts: [{ text: message }] }]
+                        contents: [{
+                            parts: [{ text: message }]
+                        }],
+                        generationConfig: {
+                            temperature: this._props.temperature || 0.2
+                        }
                     })
                 });
 
@@ -52,58 +108,54 @@
 
                 if (data.candidates && data.candidates[0].content) {
                     let reply = data.candidates[0].content.parts[0].text;
-                    reply = reply.replace(/\n/g, '<br>');
-                    chatDiv.innerHTML += `<div class="message gemini-msg"><strong>Gemini:</strong><br>${reply}</div>`;
+                    reply = reply.replace(/\n/g, "<br>");
+                    this._addMsg("gemini-msg", `<strong>Gemini:</strong><br>${reply}`);
                 } else if (data.error) {
-                    chatDiv.innerHTML += `<div class="message error-msg"><strong>Error de API:</strong> ${data.error.message}</div>`;
+                    this._addMsg("error-msg", `<strong>Error API:</strong> ${data.error.message}`);
+                } else {
+                    this._addMsg("error-msg", `<strong>Respuesta inesperada:</strong> ${JSON.stringify(data)}`);
                 }
             } catch (error) {
-                chatDiv.innerHTML += `<div class="message error-msg"><strong>Error de red:</strong> ${error.message}</div>`;
+                this._addMsg("error-msg", `<strong>Error de red:</strong> ${error.message}`);
             }
-            
-            this._shadowRoot.host.scrollTop = this._shadowRoot.host.scrollHeight;
         }
     }
 
     customElements.define("com-hadrian-sap-gemini", GeminiWidget);
 
-    // --- 2. PANEL BUILDER (Ahora sí, con la caja de texto y guardado) ---
+    // --- BUILDER ---
     class GeminiWidgetBuilder extends HTMLElement {
         constructor() {
             super();
-            this._shadowRoot = this.attachShadow({mode: "open"});
+            this._shadowRoot = this.attachShadow({ mode: "open" });
             this._shadowRoot.innerHTML = `
-                <div style="padding: 15px; font-family: Arial, sans-serif; font-size: 13px; color: #333;">
+                <div style="padding:15px; font-family:Arial,sans-serif; font-size:13px; color:#333;">
                     <strong>Configuración de Gemini</strong><br><br>
-                    <label for="apiKey" style="font-weight: bold;">API Key de Google Gemini:</label><br>
-                    <input type="password" id="apiKey" style="width: 100%; padding: 6px; margin-top: 6px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;" placeholder="Pega tu API Key aquí...">
+                    <label style="font-weight:bold;">API Key:</label><br>
+                    <input type="password" id="apiKey" style="width:100%;padding:6px;margin:6px 0 12px;border:1px solid #ccc;border-radius:4px;box-sizing:border-box;" placeholder="Pega tu API Key aquí...">
+                    <label style="font-weight:bold;">Modelo:</label><br>
+                    <select id="model" style="width:100%;padding:6px;margin-top:6px;border:1px solid #ccc;border-radius:4px;">
+                        <option value="gemini-2.0-flash">gemini-2.0-flash (recomendado)</option>
+                        <option value="gemini-1.5-flash">gemini-1.5-flash</option>
+                        <option value="gemini-2.0-pro-exp">gemini-2.0-pro-exp</option>
+                    </select>
                 </div>
             `;
         }
 
-        // SAC usa esto para poblar el panel si ya tenías una clave guardada
-        set apiKey(newApiKey) {
-            this._shadowRoot.getElementById("apiKey").value = newApiKey || "";
-        }
+        set apiKey(v) { this._shadowRoot.getElementById("apiKey").value = v || ""; }
+        get apiKey()  { return this._shadowRoot.getElementById("apiKey").value; }
+        set model(v)  { this._shadowRoot.getElementById("model").value = v || "gemini-2.0-flash"; }
+        get model()   { return this._shadowRoot.getElementById("model").value; }
 
-        get apiKey() {
-            return this._shadowRoot.getElementById("apiKey").value;
-        }
-
-        // Detectar cuando pegas la clave y enviarla a las propiedades internas de SAC
         connectedCallback() {
-            this._shadowRoot.getElementById("apiKey").addEventListener("change", (e) => {
-                this.dispatchEvent(new CustomEvent("propertiesChanged", {
-                    detail: {
-                        properties: {
-                            apiKey: e.target.value
-                        }
-                    }
-                }));
-            });
+            const dispatch = () => this.dispatchEvent(new CustomEvent("propertiesChanged", {
+                detail: { properties: { apiKey: this.apiKey, model: this.model } }
+            }));
+            this._shadowRoot.getElementById("apiKey").addEventListener("change", dispatch);
+            this._shadowRoot.getElementById("model").addEventListener("change", dispatch);
         }
     }
 
     customElements.define("com-hadrian-sap-gemini-builder", GeminiWidgetBuilder);
-
 })();
