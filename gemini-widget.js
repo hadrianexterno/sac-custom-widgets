@@ -24,8 +24,7 @@
         </style>
         <div class="chat-container" id="chat">
             <div class="message system-msg">
-                <strong>Estado:</strong> Widget listo. Llama a <code>postMessage()</code> desde un script SAC
-                o usa el botón de abajo si ya pasaste los datos.
+                <strong>Estado:</strong> Widget listo. Ejecuta el botón desde SAC para analizar la tabla.
             </div>
         </div>
         <div class="btn-row">
@@ -40,7 +39,7 @@
             this._shadowRoot = this.attachShadow({ mode: "open" });
             this._shadowRoot.appendChild(template.content.cloneNode(true));
             this._props  = {};
-            this._lastData = "";   // guarda los datos que vienen de SAC
+            this._lastData = "";   
         }
 
         connectedCallback() {
@@ -63,9 +62,8 @@
 
         onCustomWidgetAfterUpdate(changedProperties) {}
 
-        // MÉTODO PÚBLICO — SAC lo llama con los datos del modelo
         postMessage(message) {
-            this._lastData = message;   // guarda para el botón
+            this._lastData = message;   
             this._runGemini(message);
         }
 
@@ -79,14 +77,19 @@
         }
 
         async _runGemini(message) {
-            // Eliminamos la validación del panel de diseño, pasa directo a procesar
-            this._addMsg("user-msg", "<strong>Datos enviados a Gemini...</strong>");
+            // 1. Verificamos que hayas puesto la llave en el panel de SAC
+            if (!this._props.apiKey) {
+                this._addMsg("error-msg", "<strong>Error:</strong> Por favor, pega tu API Key en el panel de diseño de SAC.");
+                return;
+            }
 
-            // ✅ INSERTA TU LLAVE AQUÍ, DIRECTO EN GITHUB
-            const MI_LLAVE_GEMINI = "PEGA_TU_LLAVE_AQUI";
+            this._addMsg("user-msg", "<strong>Analizando datos con Gemini...</strong>");
 
-            const model = this._props.model || "gemini-2.0-flash";
-            const url   = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${MI_LLAVE_GEMINI}`;
+            // 2. FORZAMOS EL MODELO AQUÍ PARA EVITAR EL ERROR DE SAC
+            const model = "gemini-2.0-flash";
+            
+            // 3. Usamos la llave que configuraste en las propiedades de SAC (this._props.apiKey)
+            const url   = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${this._props.apiKey}`;
 
             try {
                 const response = await fetch(url, {
@@ -121,7 +124,7 @@
 
     customElements.define("com-hadrian-sap-gemini", GeminiWidget);
 
-    // --- BUILDER (Panel de Diseño Limpio) ---
+    // --- BUILDER (Panel de Diseño con la caja de la API Key restaurada) ---
     class GeminiWidgetBuilder extends HTMLElement {
         constructor() {
             super();
@@ -129,25 +132,21 @@
             this._shadowRoot.innerHTML = `
                 <div style="padding:15px; font-family:Arial,sans-serif; font-size:13px; color:#333;">
                     <strong>Configuración de Gemini</strong><br><br>
-                    <p style="color: #16a34a; font-weight: bold;">✓ API Key incrustada en el código</p>
-                    <label style="font-weight:bold;">Modelo:</label><br>
-                    <select id="model" style="width:100%;padding:6px;margin-top:6px;border:1px solid #ccc;border-radius:4px;">
-                        <option value="gemini-2.0-flash">gemini-2.0-flash (recomendado)</option>
-                        <option value="gemini-1.5-flash">gemini-1.5-flash</option>
-                        <option value="gemini-2.0-pro-exp">gemini-2.0-pro-exp</option>
-                    </select>
+                    <label style="font-weight:bold;">API Key:</label><br>
+                    <input type="password" id="apiKey" style="width:100%;padding:6px;margin:6px 0 12px;border:1px solid #ccc;border-radius:4px;box-sizing:border-box;" placeholder="Pega tu API Key aquí...">
+                    <p style="color: #16a34a; font-size: 11px;">✓ Modelo Gemini 2.0 Flash configurado internamente.</p>
                 </div>
             `;
         }
 
-        set model(v)  { this._shadowRoot.getElementById("model").value = v || "gemini-2.0-flash"; }
-        get model()   { return this._shadowRoot.getElementById("model").value; }
+        set apiKey(v) { this._shadowRoot.getElementById("apiKey").value = v || ""; }
+        get apiKey()  { return this._shadowRoot.getElementById("apiKey").value; }
 
         connectedCallback() {
             const dispatch = () => this.dispatchEvent(new CustomEvent("propertiesChanged", {
-                detail: { properties: { model: this.model } }
+                detail: { properties: { apiKey: this.apiKey } }
             }));
-            this._shadowRoot.getElementById("model").addEventListener("change", dispatch);
+            this._shadowRoot.getElementById("apiKey").addEventListener("change", dispatch);
         }
     }
 
